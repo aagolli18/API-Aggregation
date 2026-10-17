@@ -1,7 +1,6 @@
 ﻿using API_Aggregation.Interfaces;
 using API_Aggregation.Models;
 using Microsoft.Extensions.Caching.Memory;
-using System.Diagnostics;
 
 namespace API_Aggregation.Services;
 
@@ -72,29 +71,36 @@ public class AggregationService
         };
     }
 
-
     private async Task<(bool Success, List<ApiResult> Results)> ExecuteProviderAsync(IApiProvider provider, CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-
-        try
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
-            var results = await provider.GetDataAsync(cancellationToken);
+            try
+            {
+                var results = await provider.GetDataAsync(cancellationToken);
 
-            stopwatch.Stop();
-            _statisticsService.RecordRequest(provider.ApiName, stopwatch.Elapsed.TotalMilliseconds);
+                stopwatch.Stop();
+                _statisticsService.RecordRequest(provider.ApiName, stopwatch.Elapsed.TotalMilliseconds);
 
-            return (true, results);
+                return (true, results);
+            }
+            catch (Exception ex)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (attempt < 3 && ex is (HttpRequestException or TimeoutException))
+                {
+                    await Task.Delay(500, cancellationToken);
+                    continue;
+                }
+
+                break;
+            }
         }
-        catch (Exception)
-        {
-            stopwatch.Stop();
-
-            cancellationToken.ThrowIfCancellationRequested();
-            return (false, new List<ApiResult>());
-        }
+        stopwatch.Stop();
+        return (false, new List<ApiResult>()); // Fallback
     }
-
 
 
     private List<ApiResult> ApplyFiltersAndSorting(List<ApiResult> results, AggregationFilter? filter)
