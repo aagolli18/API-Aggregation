@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="API_Aggregation.Tests/API_Aggregation.Tests.csproj" Id="4b0a7421-db22-491c-a5eb-bbb581f2f060" />
   <Project Path="API_Aggregation/API_Aggregation.csproj" />
 </Solution>
