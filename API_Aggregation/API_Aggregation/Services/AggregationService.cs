@@ -1,19 +1,41 @@
 ﻿using API_Aggregation.Interfaces;
 using API_Aggregation.Models;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace API_Aggregation.Services;
 
 public class AggregationService
 {
     private readonly IEnumerable<IApiProvider> _providers;
-
-    public AggregationService(IEnumerable<IApiProvider> providers)
+    private readonly IMemoryCache _memoryCache;
+    private readonly IConfiguration _configuration;
+    public AggregationService(IEnumerable<IApiProvider> providers, IMemoryCache memoryCache, IConfiguration configuration)
     {
         _providers = providers;
+        _memoryCache = memoryCache;
+        _configuration = configuration;
     }
+
 
     public async Task<AggregationResponse> GetAllDataAsync(AggregationFilter? filter = null, CancellationToken cancellationToken = default)
     {
+        var cacheKey = _configuration["CacheSettings:AggregationCacheKey"] ?? "aggregated-api-data";
+
+        int durationInMinutes = _configuration.GetValue<int?>("CacheSettings:DurationInMinutes") ?? 5;
+      
+        var cachedResponse = _memoryCache.Get<AggregationResponse>(cacheKey);
+
+        //Return cached data if available
+        if (cachedResponse != null)
+        {
+            return new AggregationResponse
+            {
+                Results = ApplyFiltersAndSorting(cachedResponse.Results, filter),
+                SuccessfulProviders = cachedResponse.SuccessfulProviders,
+                FailedProviders = cachedResponse.FailedProviders
+            };
+        }
+
         var providers = _providers.ToList();
 
         var tasks = new List<Task<(bool Success, List<ApiResult> Results)>>();
@@ -23,17 +45,28 @@ public class AggregationService
             tasks.Add(ExecuteProviderAsync(provider, cancellationToken));
         }
 
+        //Wait for all API requests to finish
         var outcomes = await Task.WhenAll(tasks);
 
+        //Combine results from all providers
         var combinedResults = outcomes.SelectMany(outcome => outcome.Results).ToList();
 
-        var filteredResults = ApplyFiltersAndSorting(combinedResults, filter);
+        //Create the response with unfiltered data
+        var response = new AggregationResponse
+        {
+            Results = combinedResults,
+            SuccessfulProviders = outcomes.Count(outcome => outcome.Success),
+            FailedProviders = outcomes.Count(outcome => !outcome.Success)
+        };
+
+        // Store the response in cache
+        _memoryCache.Set(cacheKey, response, TimeSpan.FromMinutes(durationInMinutes));
 
         return new AggregationResponse
         {
-            Results = filteredResults,
-            SuccessfulProviders = outcomes.Count(outcome => outcome.Success),
-            FailedProviders = outcomes.Count(outcome => !outcome.Success)
+            Results = ApplyFiltersAndSorting(response.Results, filter),
+            SuccessfulProviders = response.SuccessfulProviders,
+            FailedProviders = response.FailedProviders
         };
     }
 
