@@ -1,9 +1,11 @@
 ﻿using API_Aggregation.Models;
 using API_Aggregation.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API_Aggregation.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class AggregationController : ControllerBase

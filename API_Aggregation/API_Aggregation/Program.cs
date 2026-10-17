@@ -1,15 +1,13 @@
 using API_Aggregation.Interfaces;
 using API_Aggregation.Providers;
 using API_Aggregation.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
-
 builder.Services.AddHttpClient<DummyJsonApiProvider>(client =>
 {
     client.BaseAddress = new Uri("https://dummyjson.com/");
@@ -28,28 +26,62 @@ builder.Services.AddHttpClient<JsonPlaceholderApiProvider>(client =>
 builder.Services.AddTransient<IApiProvider>(sp => sp.GetRequiredService<DummyJsonApiProvider>());
 builder.Services.AddTransient<IApiProvider>(sp => sp.GetRequiredService<PokeApiProvider>());
 builder.Services.AddTransient<IApiProvider>(sp => sp.GetRequiredService<JsonPlaceholderApiProvider>());
-
 builder.Services.AddScoped<AggregationService>();
 
 builder.Services.AddMemoryCache();
 
 builder.Services.AddSingleton<IApiStatisticsService, ApiStatisticsService>();
 
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer",
+        new Microsoft.OpenApi.OpenApiSecurityScheme
+        {
+            Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT"
+        });
+
+    options.AddSecurityRequirement(document =>
+        new Microsoft.OpenApi.OpenApiSecurityRequirement
+        {
+            [new Microsoft.OpenApi.OpenApiSecuritySchemeReference(
+                "Bearer", document)] = []
+        });
+});
+
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(
+                    builder.Configuration["JwtSettings:SecretKey"]!))
+        };
+    });
+
+builder.Services.AddAuthorization();
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
-
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/openapi/v1.json", "API v1");
-    });
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

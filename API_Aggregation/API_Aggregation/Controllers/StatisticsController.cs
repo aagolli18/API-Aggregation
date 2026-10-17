@@ -1,8 +1,10 @@
 ﻿using API_Aggregation.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API_Aggregation.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class StatisticsController : ControllerBase
