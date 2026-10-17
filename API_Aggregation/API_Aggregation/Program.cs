@@ -1,3 +1,4 @@
+using API_Aggregation.BackgroundServices;
 using API_Aggregation.Interfaces;
 using API_Aggregation.Providers;
 using API_Aggregation.Services;
@@ -69,6 +70,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 builder.Services.AddAuthorization();
+builder.Services.AddHostedService<ApiMonitoringService>();
 
 var app = builder.Build();
 
