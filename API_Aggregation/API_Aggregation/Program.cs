@@ -25,18 +25,15 @@ builder.Services.AddHttpClient<JsonPlaceholderApiProvider>(client =>
     client.BaseAddress = new Uri("https://jsonplaceholder.typicode.com/");
 });
 
-builder.Services.AddTransient<IApiProvider>(sp =>
-    sp.GetRequiredService<DummyJsonApiProvider>());
-
-builder.Services.AddTransient<IApiProvider>(sp =>
-    sp.GetRequiredService<PokeApiProvider>());
-
-builder.Services.AddTransient<IApiProvider>(sp =>
-    sp.GetRequiredService<JsonPlaceholderApiProvider>());
+builder.Services.AddTransient<IApiProvider>(sp => sp.GetRequiredService<DummyJsonApiProvider>());
+builder.Services.AddTransient<IApiProvider>(sp => sp.GetRequiredService<PokeApiProvider>());
+builder.Services.AddTransient<IApiProvider>(sp => sp.GetRequiredService<JsonPlaceholderApiProvider>());
 
 builder.Services.AddScoped<AggregationService>();
 
 builder.Services.AddMemoryCache();
+
+builder.Services.AddSingleton<IApiStatisticsService, ApiStatisticsService>();
 
 var app = builder.Build();
 

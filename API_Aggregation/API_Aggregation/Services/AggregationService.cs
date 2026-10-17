@@ -1,6 +1,7 @@
 ﻿using API_Aggregation.Interfaces;
 using API_Aggregation.Models;
 using Microsoft.Extensions.Caching.Memory;
+using System.Diagnostics;
 
 namespace API_Aggregation.Services;
 
@@ -9,20 +10,21 @@ public class AggregationService
     private readonly IEnumerable<IApiProvider> _providers;
     private readonly IMemoryCache _memoryCache;
     private readonly IConfiguration _configuration;
-    public AggregationService(IEnumerable<IApiProvider> providers, IMemoryCache memoryCache, IConfiguration configuration)
+    private readonly IApiStatisticsService _statisticsService;
+    public AggregationService(IEnumerable<IApiProvider> providers, IMemoryCache memoryCache, IConfiguration configuration, IApiStatisticsService statisticsService)
     {
         _providers = providers;
         _memoryCache = memoryCache;
         _configuration = configuration;
+        _statisticsService = statisticsService;
     }
-
 
     public async Task<AggregationResponse> GetAllDataAsync(AggregationFilter? filter = null, CancellationToken cancellationToken = default)
     {
         var cacheKey = _configuration["CacheSettings:AggregationCacheKey"] ?? "aggregated-api-data";
 
         int durationInMinutes = _configuration.GetValue<int?>("CacheSettings:DurationInMinutes") ?? 5;
-      
+
         var cachedResponse = _memoryCache.Get<AggregationResponse>(cacheKey);
 
         //Return cached data if available
@@ -73,14 +75,21 @@ public class AggregationService
 
     private async Task<(bool Success, List<ApiResult> Results)> ExecuteProviderAsync(IApiProvider provider, CancellationToken cancellationToken)
     {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
         try
         {
             var results = await provider.GetDataAsync(cancellationToken);
+
+            stopwatch.Stop();
+            _statisticsService.RecordRequest(provider.ApiName, stopwatch.Elapsed.TotalMilliseconds);
 
             return (true, results);
         }
         catch (Exception)
         {
+            stopwatch.Stop();
+
             cancellationToken.ThrowIfCancellationRequested();
             return (false, new List<ApiResult>());
         }
